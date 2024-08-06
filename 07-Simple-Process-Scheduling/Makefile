@@ -1,4 +1,4 @@
-CROSS_COMPILE := riscv64-linux-gnu-
+CROSS_COMPILE := riscv64-unknown-elf-
 CC := ${CROSS_COMPILE}gcc
 AS := ${CROSS_COMPILE}as
 LD := ${CROSS_COMPILE}ld
@@ -22,7 +22,7 @@ bin/%.asmo: %.s
 	${AS} -g $< -o $@
 
 bin/%.clango: %.c ${HEADERS}
-	${CC} -ffreestanding -c -O0 -g $< -o $@
+	${CC} -mcmodel=medany -ffreestanding -c -O0 -g $< -o $@
 
 run: bin/firmware.bin
 	qemu-system-riscv64 -machine virt -smp 2 -m 2G -serial stdio -bios bin/firmware.bin -s -display none
