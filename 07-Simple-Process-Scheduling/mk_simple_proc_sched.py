@@ -456,13 +456,11 @@ SECTIONS {}
 '''
 
 def test():
-	out = [ARCH, ARCH_ASM, UART, CPU, TIMER, LIBC
-		gen_proc_header(),
-		gen_procs(),
+	out = [ARCH, ARCH_ASM, UART, CPU, TIMER, LIBC]
+	out += gen_proc_header() + gen_procs() + [
 		INTERRUPTS,
 		TRAP_C,
-		gen_firmware()
-	]
+	] + gen_firmware()
 	c = '\n'.join(out)
 	print(c)
 
