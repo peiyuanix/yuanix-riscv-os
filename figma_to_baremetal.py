@@ -357,52 +357,6 @@ static inline u64 csrr_mcause(){
 }
 '''
 
-NO_UART = '''
-#define uart_putc(...)
-#define uart_print(...)
-#define uart_init(...)
-'''
-
-UART = '''
-#define UART_BASE 0x10000000
-#define UART_RBR_OFFSET 0  /* In:  Recieve Buffer Register */
-#define UART_THR_OFFSET 0  /* Out: Transmitter Holding Register */
-#define UART_DLL_OFFSET 0  /* Out: Divisor Latch Low */
-#define UART_IER_OFFSET 1  /* I/O: Interrupt Enable Register */
-#define UART_DLM_OFFSET 1  /* Out: Divisor Latch High */
-#define UART_FCR_OFFSET 2  /* Out: FIFO Control Register */
-#define UART_IIR_OFFSET 2  /* I/O: Interrupt Identification Register */
-#define UART_LCR_OFFSET 3  /* Out: Line Control Register */
-#define UART_MCR_OFFSET 4  /* Out: Modem Control Register */
-#define UART_LSR_OFFSET 5  /* In:  Line Status Register */
-#define UART_MSR_OFFSET 6  /* In:  Modem Status Register */
-#define UART_SCR_OFFSET 7  /* I/O: Scratch Register */
-#define UART_MDR1_OFFSET 8 /* I/O:  Mode Register */
-#define PLATFORM_UART_INPUT_FREQ 10000000
-#define PLATFORM_UART_BAUDRATE 115200
-static u8 *uart_base_addr = (u8 *)UART_BASE;
-static void set_reg(u32 offset, u32 val){ writeu8(uart_base_addr + offset, val);}
-static u32 get_reg(u32 offset){ return readu8(uart_base_addr + offset);}
-static void uart_putc(u8 ch){ set_reg(UART_THR_OFFSET, ch);}
-static void uart_print(char *str){ while (*str) uart_putc(*str++);}
-
-static inline void uart_init(){
-  u16 bdiv = (PLATFORM_UART_INPUT_FREQ + 8 * PLATFORM_UART_BAUDRATE) / (16 * PLATFORM_UART_BAUDRATE);
-  set_reg(UART_IER_OFFSET, 0x00); /* Disable all interrupts */
-  set_reg(UART_LCR_OFFSET, 0x80); /* Enable DLAB */
-  if (bdiv) {
-    set_reg(UART_DLL_OFFSET, bdiv & 0xff); /* Set divisor low byte */
-    set_reg(UART_DLM_OFFSET, (bdiv >> 8) & 0xff); /* Set divisor high byte */
-  }
-  set_reg(UART_LCR_OFFSET, 0x03); /* 8 bits, no parity, one stop bit */
-  set_reg(UART_FCR_OFFSET, 0x01); /* Enable FIFO */
-  set_reg(UART_MCR_OFFSET, 0x00); /* No modem control DTR RTS */
-  get_reg(UART_LSR_OFFSET); /* Clear line status */
-  get_reg(UART_RBR_OFFSET); /* Read receive buffer */  
-  set_reg(UART_SCR_OFFSET, 0x00); /* Set scratchpad */
-}
-'''
-
 LIBC = r'''
 void *memset(void *s, int c, size_t n){
   unsigned char *p = s;
@@ -510,43 +464,13 @@ def gen_pal():
 	]
 	return '\n'.join(asm)
 
-
-FIRMWARE_MAIN = r'''
-extern void trap_entry();
-void firmware_main(){
-  uart_init();
-  procs_init();
-  uart_print("[firmware_main memset proc_list]\n");
-  for (int i = %s; i < PROC_TOTAL_COUNT; i++) {
-    memset(&proc_list[i], 0, sizeof(proc_list[i]));
-    proc_list[i].state = PROC_STATE_NONE;
-  }
-  active_pid = -1;
-  set_timeout(10000); // setup M-mode trap vector
-  csrw_mtvec((u64)trap_entry); // enable M-mode timer interrupt  
-  csrw_mie(MIE_MTIE);
-  csrs_mstatus(MSTAUTS_MIE); // enable MIE in mstatus
-  uart_print("[firmware_main waiting...]\n");
-  while(1) {
-  	uart_putc('<');
-    %s
-  	uart_putc('>');
-  }
-}
-'''
-
 def make(c):
-	out = [ARCH, ARCH_ASM]
-	if '--no-uart' in sys.argv: out.append(NO_UART)
-	else: out.append(UART)
-	out.append(LIBC)
+	out = [ARCH, ARCH_ASM, LIBC]
 	if '--mouse' in sys.argv: out.append(MOUSE_C)
 	out.append(c)
-
 	c = '\n'.join(out)
 	tmpc = '/tmp/figma.c'
 	open(tmpc, 'wb').write(c.encode('utf-8'))
-
 	tmpld = '/tmp/linker.ld'
 	open(tmpld,'wb').write(LINKER_SCRIPT.encode('utf-8'))
 	tmps = '/tmp/asm.s'
@@ -586,7 +510,6 @@ def make(c):
 		print(cmd)
 		subprocess.check_call(cmd.split())
 	return elf
-
 
 def asm2o(s, name='asm2o'):
 	asm = '/tmp/asm2o.s'
